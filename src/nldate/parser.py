@@ -75,6 +75,13 @@ def parse(s: str, today: date | None = None) -> date:
         amount = int(match.group(1))
         unit = match.group(2)
         return today - _make_delta(amount, unit)
+    
+    # X days/weeks/months/years from now
+    match = re.fullmatch(r"(\d+) (day|week|month|year)s? from now", s)
+    if match:
+        amount = int(match.group(1))
+        unit = match.group(2)
+        return today + _make_delta(amount, unit)
 
     # Compound: X years and Y months after/before ...
     match = re.fullmatch(r"(\d+) years? and (\d+) months? (before|after) (.+)", s)
