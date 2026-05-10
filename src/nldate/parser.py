@@ -16,6 +16,21 @@ WEEKDAYS = {
     "sunday": 6,
 }
 
+WORD_NUMS = {
+    "a": 1,
+    "an": 1,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+}
+
 
 def parse(s: str, today: date | None = None) -> date:
     """
@@ -25,7 +40,9 @@ def parse(s: str, today: date | None = None) -> date:
         today = date.today()
 
     s = s.strip().lower()
-    s = re.sub(r"\b(a|an)\b", "1", s)
+    tokens = s.split()
+    tokens = [str(WORD_NUMS.get(t, t)) for t in tokens]
+    s = " ".join(tokens)
 
     # Simple keywords
     if s == "today":
