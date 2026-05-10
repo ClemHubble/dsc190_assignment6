@@ -90,22 +90,40 @@ def parse(s: str, today: date | None = None) -> date:
         return today - _delta(int(m.group(1)), m.group(2))
 
     # -------------------------
-    # COMPOUND (IMPORTANT FIX)
-    # supports:
-    # "2 years, 3 months before dec 1 2025"
-    # "2 years 3 months after ..."
+    # COMPOUND 
     # -------------------------
-    m = re.fullmatch(
-        r"(\d+)\s*years?\s*(?:,\s*)?(\d+)\s*months?\s*(before|after)\s+(.+)",
-        s,
-    )
-    if m:
-        years = int(m.group(1))
-        months = int(m.group(2))
-        direction = m.group(3)
-        base = parse(m.group(4), today)
+    m = re.fullmatch(r"(.+?)\s+(before|after)\s+(.+)", s)
 
-        delta = relativedelta(years=years, months=months)
+    if m:
+        left = m.group(1)
+        direction = m.group(2)
+        base_str = m.group(3)
+
+        base = parse(base_str, today)
+
+        parts = re.split(r",|and", left)
+
+        years = months = weeks = days = 0
+
+        for part in parts:
+            part = part.strip()
+            mm = re.fullmatch(r"(\d+)\s*(day|week|month|year)s?", part)
+            if not mm:
+                continue
+
+            amount = int(mm.group(1))
+            unit = mm.group(2)
+
+            if unit == "day":
+                days += amount
+            elif unit == "week":
+                weeks += amount
+            elif unit == "month":
+                months += amount
+            elif unit == "year":
+                years += amount
+
+        delta = relativedelta(years=years, months=months, weeks=weeks, days=days)
 
         return base - delta if direction == "before" else base + delta
 
