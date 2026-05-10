@@ -59,9 +59,7 @@ def parse(s: str, today: date | None = None) -> date:
         return today - _make_delta(amount, unit)
 
     # Compound: X years and Y months after/before ...
-    match = re.fullmatch(
-        r"(\d+) years? and (\d+) months? (before|after) (.+)", s
-    )
+    match = re.fullmatch(r"(\d+) years? and (\d+) months? (before|after) (.+)", s)
     if match:
         years = int(match.group(1))
         months = int(match.group(2))
@@ -73,9 +71,7 @@ def parse(s: str, today: date | None = None) -> date:
         return base - delta if direction == "before" else base + delta
 
     # General relative: X unit before/after DATE
-    match = re.fullmatch(
-        r"(\d+) (day|week|month|year)s? (before|after) (.+)", s
-    )
+    match = re.fullmatch(r"(\d+) (day|week|month|year)s? (before|after) (.+)", s)
     if match:
         amount = int(match.group(1))
         unit = match.group(2)

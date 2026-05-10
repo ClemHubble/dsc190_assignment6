@@ -37,8 +37,12 @@ def test_months_after():
 def test_years_after():
     assert parse("1 year after January 1st, 2025") == date(2026, 1, 1)
 
+
 def test_compound_relative():
-    assert parse("1 year and 2 months after yesterday", today=date(2025, 5, 10)) == date(2026, 7, 9)
+    assert parse(
+        "1 year and 2 months after yesterday", today=date(2025, 5, 10)
+    ) == date(2026, 7, 9)
+
 
 def test_last_weekday():
     assert parse("last Monday", today=date(2025, 5, 10)) == date(2025, 5, 5)
