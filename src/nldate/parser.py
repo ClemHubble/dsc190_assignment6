@@ -25,6 +25,7 @@ def parse(s: str, today: date | None = None) -> date:
         today = date.today()
 
     s = s.strip().lower()
+    s = re.sub(r"\b(a|an)\b", "1", s)
 
     # Simple keywords
     if s == "today":
