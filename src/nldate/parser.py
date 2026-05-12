@@ -34,14 +34,24 @@ WORD_NUMS = {
 
 def _normalize(s: str) -> str:
     s = s.strip().lower()
+
+    # preserve periods for month abbreviations like "Dec."
     s = s.replace(",", " ")
 
-    # convert word numbers -> digits
+    # collapse whitespace
+    s = re.sub(r"\s+", " ", s)
+
+    # replace word numbers
     pattern = r"\b(" + "|".join(map(re.escape, WORD_NUMS.keys())) + r")\b"
-    return re.sub(pattern, lambda m: str(WORD_NUMS[m.group(0)]), s)
+    s = re.sub(pattern, lambda m: str(WORD_NUMS[m.group(0)]), s)
+
+    return s.strip()
 
 
 def parse(s: str, today: date | None = None) -> date:
+    """
+    Parse natural language date expressions into datetime.date objects.
+    """
     if today is None:
         today = date.today()
 
@@ -52,138 +62,160 @@ def parse(s: str, today: date | None = None) -> date:
     # -------------------------
     if s == "today":
         return today
+
     if s == "tomorrow":
         return today + timedelta(days=1)
+
     if s == "yesterday":
         return today - timedelta(days=1)
 
     # -------------------------
-    # next / last weekday
+    # next weekday
     # -------------------------
-    m = re.fullmatch(r"next (\w+)", s)
-    if m:
-        return _next_weekday(today, m.group(1))
+    match = re.fullmatch(r"next (\w+)", s)
+    if match:
+        return _next_weekday(today, match.group(1))
 
-    m = re.fullmatch(r"last (\w+)", s)
-    if m:
-        return _last_weekday(today, m.group(1))
+    # -------------------------
+    # last weekday
+    # -------------------------
+    match = re.fullmatch(r"last (\w+)", s)
+    if match:
+        return _last_weekday(today, match.group(1))
 
     # -------------------------
     # in X units
     # -------------------------
-    m = re.fullmatch(r"in (\d+) (day|week|month|year)s?", s)
-    if m:
-        return today + _delta(int(m.group(1)), m.group(2))
-
-    # -------------------------
-    # X units from now
-    # -------------------------
-    m = re.fullmatch(r"(\d+) (day|week|month|year)s? from now", s)
-    if m:
-        return today + _delta(int(m.group(1)), m.group(2))
+    match = re.fullmatch(r"in (\d+) (day|week|month|year)s?", s)
+    if match:
+        amount = int(match.group(1))
+        unit = match.group(2)
+        return today + _make_delta(amount, unit)
 
     # -------------------------
     # X units ago
     # -------------------------
-    m = re.fullmatch(r"(\d+) (day|week|month|year)s? ago", s)
-    if m:
-        return today - _delta(int(m.group(1)), m.group(2))
+    match = re.fullmatch(r"(\d+) (day|week|month|year)s? ago", s)
+    if match:
+        amount = int(match.group(1))
+        unit = match.group(2)
+        return today - _make_delta(amount, unit)
 
     # -------------------------
-    # COMPOUND 
+    # X units from now
     # -------------------------
-    m = re.fullmatch(r"(.+?)\s+(before|after)\s+(.+)", s)
+    match = re.fullmatch(r"(\d+) (day|week|month|year)s? from now", s)
+    if match:
+        amount = int(match.group(1))
+        unit = match.group(2)
+        return today + _make_delta(amount, unit)
 
-    if m:
-        left = m.group(1)
-        direction = m.group(2)
-        base_str = m.group(3)
+    # -------------------------
+    # Compound before/after:
+    # "2 years, 3 months before Dec. 1, 2025"
+    # "1 year and 2 months after yesterday"
+    # -------------------------
+    match = re.fullmatch(r"(.+?)\s+(before|after)\s+(.+)", s)
+    if match:
+        duration_str = match.group(1)
+        direction = match.group(2)
+        base_str = match.group(3)
 
-        base = parse(base_str, today)
+        # parse base recursively
+        base_date = parse(base_str, today)
 
-        parts = re.split(r",|and", left)
+        # split duration pieces
+        parts = re.split(r"\s*(?:,|and)\s*", duration_str)
 
-        years = months = weeks = days = 0
+        delta = relativedelta()
 
         for part in parts:
-            part = part.strip()
-            mm = re.fullmatch(r"(\d+)\s*(day|week|month|year)s?", part)
-            if not mm:
+            submatch = re.fullmatch(r"(\d+)\s*(day|week|month|year)s?", part)
+            if not submatch:
                 continue
 
-            amount = int(mm.group(1))
-            unit = mm.group(2)
+            amount = int(submatch.group(1))
+            unit = submatch.group(2)
 
             if unit == "day":
-                days += amount
+                delta += relativedelta(days=amount)
             elif unit == "week":
-                weeks += amount
+                delta += relativedelta(weeks=amount)
             elif unit == "month":
-                months += amount
+                delta += relativedelta(months=amount)
             elif unit == "year":
-                years += amount
+                delta += relativedelta(years=amount)
 
-        delta = relativedelta(years=years, months=months, weeks=weeks, days=days)
-
-        return base - delta if direction == "before" else base + delta
-
-    # -------------------------
-    # general relative before/after
-    # -------------------------
-    m = re.fullmatch(r"(\d+) (day|week|month|year)s? (before|after) (.+)", s)
-    if m:
-        amount = int(m.group(1))
-        unit = m.group(2)
-        direction = m.group(3)
-        base = parse(m.group(4), today)
-
-        delta = _delta(amount, unit)
-
-        return base - delta if direction == "before" else base + delta
+        # only return if at least one valid duration was found
+        if delta != relativedelta():
+            return base_date - delta if direction == "before" else base_date + delta
 
     # -------------------------
-    # fallback: dateutil
+    # General relative:
+    # "3 weeks before tomorrow"
+    # -------------------------
+    match = re.fullmatch(r"(\d+) (day|week|month|year)s? (before|after) (.+)", s)
+    if match:
+        amount = int(match.group(1))
+        unit = match.group(2)
+        direction = match.group(3)
+        base_str = match.group(4)
+
+        base_date = parse(base_str, today)
+        delta = _make_delta(amount, unit)
+
+        return base_date - delta if direction == "before" else base_date + delta
+
+    # -------------------------
+    # Fallback absolute parser
     # -------------------------
     try:
         return dt_parse(s).date()
-    except Exception:
-        raise ValueError(f"Could not parse date string: {s}")
+    except Exception as e:
+        raise ValueError(f"Could not parse date string: {s}") from e
 
 
-# -------------------------
-# helpers
-# -------------------------
-def _delta(amount: int, unit: str):
+def _make_delta(amount: int, unit: str):
     if unit == "day":
         return timedelta(days=amount)
+
     if unit == "week":
         return timedelta(weeks=amount)
+
     if unit == "month":
         return relativedelta(months=amount)
+
     if unit == "year":
         return relativedelta(years=amount)
-    raise ValueError(unit)
+
+    raise ValueError(f"Unsupported time unit: {unit}")
 
 
-def _next_weekday(today: date, weekday: str) -> date:
-    weekday = weekday.lower()
-    if weekday not in WEEKDAYS:
-        raise ValueError(weekday)
+def _next_weekday(today: date, weekday_name: str) -> date:
+    weekday_name = weekday_name.lower()
 
-    target = WEEKDAYS[weekday]
-    diff = (target - today.weekday() + 7) % 7
-    if diff == 0:
-        diff = 7
-    return today + timedelta(days=diff)
+    if weekday_name not in WEEKDAYS:
+        raise ValueError(f"Invalid weekday: {weekday_name}")
+
+    target = WEEKDAYS[weekday_name]
+    days_ahead = (target - today.weekday() + 7) % 7
+
+    if days_ahead == 0:
+        days_ahead = 7
+
+    return today + timedelta(days=days_ahead)
 
 
-def _last_weekday(today: date, weekday: str) -> date:
-    weekday = weekday.lower()
-    if weekday not in WEEKDAYS:
-        raise ValueError(weekday)
+def _last_weekday(today: date, weekday_name: str) -> date:
+    weekday_name = weekday_name.lower()
 
-    target = WEEKDAYS[weekday]
-    diff = (today.weekday() - target + 7) % 7
-    if diff == 0:
-        diff = 7
-    return today - timedelta(days=diff)
+    if weekday_name not in WEEKDAYS:
+        raise ValueError(f"Invalid weekday: {weekday_name}")
+
+    target = WEEKDAYS[weekday_name]
+    days_behind = (today.weekday() - target + 7) % 7
+
+    if days_behind == 0:
+        days_behind = 7
+
+    return today - timedelta(days=days_behind)
