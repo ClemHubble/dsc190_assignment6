@@ -35,13 +35,12 @@ WORD_NUMS = {
 def _normalize(s: str) -> str:
     s = s.strip().lower()
 
-    # preserve periods for month abbreviations like "Dec."
-    s = s.replace(",", " ")
+    s = re.sub(r"(?<=\d),(?=\s*\d)", "", s)
 
-    # collapse whitespace
+    s = re.sub(r"\band\b", " ", s)
+
     s = re.sub(r"\s+", " ", s)
 
-    # replace word numbers
     pattern = r"\b(" + "|".join(map(re.escape, WORD_NUMS.keys())) + r")\b"
     s = re.sub(pattern, lambda m: str(WORD_NUMS[m.group(0)]), s)
 
