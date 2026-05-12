@@ -35,12 +35,13 @@ WORD_NUMS = {
 def _normalize(s: str) -> str:
     s = s.strip().lower()
 
+    # remove commas inside numbers like 1,000
     s = re.sub(r"(?<=\d),(?=\s*\d)", "", s)
 
-    s = re.sub(r"\band\b", " ", s)
-
+    # normalize whitespace
     s = re.sub(r"\s+", " ", s)
 
+    # convert word numbers
     pattern = r"\b(" + "|".join(map(re.escape, WORD_NUMS.keys())) + r")\b"
     s = re.sub(pattern, lambda m: str(WORD_NUMS[m.group(0)]), s)
 
